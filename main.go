@@ -40,6 +40,48 @@ func getTodo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(todo)
 }
 
+func toggleTodo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+
+	var todo Todo
+
+	db.First(&todo, vars["id"])
+	todo.Done = !todo.Done
+	db.Save(&todo)
+
+	json.NewEncoder(w).Encode(todo)
+}
+
+func updateTodo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+
+	var todo Todo
+	var todoUpdates Todo
+
+	json.NewDecoder(r.Body).Decode(&todoUpdates)
+
+	db.First(&todo, vars["id"])
+	db.Model(&todo).Updates(todoUpdates)
+
+	json.NewEncoder(w).Encode(todo)
+
+}
+
+func deleteTodo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+
+	var todo Todo
+
+	db.First(&todo, vars["id"])
+	db.Delete(&todo)
+
+	json.NewEncoder(w).Encode(Todo{})
+}
+
+
 func createTodo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var todo Todo
@@ -71,7 +113,10 @@ func main() {
 
 	r.HandleFunc("/api/todos", getTodos).Methods("GET")
 	r.HandleFunc("/api/todos", createTodo).Methods("POST")
-	r.HandleFunc("/api/todos/{id}", getTodo).Methods("GET")
+	r.HandleFunc("/api/todos/{id:[0-9]+}", getTodo).Methods("GET")
+	r.HandleFunc("/api/todos/toggle/{id}", toggleTodo).Methods("POST")
+	r.HandleFunc("/api/todos/{id:[0-9]+}", updateTodo).Methods("PUT")
+	r.HandleFunc("/api/todos/{id:[0-9]+}", deleteTodo).Methods("DELETE")
 
 	log.Fatal(http.ListenAndServe("localhost:8000", r))
 }
