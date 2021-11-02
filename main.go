@@ -118,5 +118,5 @@ func main() {
 	r.HandleFunc("/api/todos/{id:[0-9]+}", updateTodo).Methods("PUT")
 	r.HandleFunc("/api/todos/{id:[0-9]+}", deleteTodo).Methods("DELETE")
 
-	log.Fatal(http.ListenAndServe("localhost:8000", r))
+	log.Fatal(http.ListenAndServe("localhost:" + os.Getenv("PORT"), r))
 }
