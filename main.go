@@ -9,6 +9,7 @@ import (
 	"time"
 	"todo-api/middleware"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -18,10 +19,10 @@ import (
 )
 
 type Todo struct {
-	ID int `json:"id" gorm:"primaryKey"`
-	Title string `json:"title"`
+	ID        int       `json:"id" gorm:"primaryKey"`
+	Title     string    `json:"title"`
 	CreatedAt time.Time `json:"createdAt"`
-	Done bool `json:"done"`
+	Done      bool      `json:"done"`
 }
 
 type TodoInput struct {
@@ -92,7 +93,6 @@ func deleteTodo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
-
 func createTodo(c *gin.Context) {
 	input := c.MustGet(gin.BindKey).(*TodoInput)
 	todo := Todo{Title: input.Title}
@@ -108,7 +108,6 @@ func main() {
 	godotenv.Load()
 
 	dsn := os.Getenv("DSN")
-	
 
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -123,9 +122,17 @@ func main() {
 	}
 
 	db.AutoMigrate(&Todo{})
-	
 
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"PUT", "PATCH", "POST", "OPTIONS", "GET"},
+		AllowHeaders:     []string{"Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization", "accept", "origin", "Cache-Control", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterTagNameFunc(func(fld reflect.StructField) string {

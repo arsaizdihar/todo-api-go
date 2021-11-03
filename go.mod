@@ -3,6 +3,7 @@ module todo-api
 go 1.17
 
 require (
+	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.7.4
 	github.com/go-playground/validator/v10 v10.9.0
 	github.com/stvp/rollbar v0.5.1
