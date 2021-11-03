@@ -114,19 +114,25 @@ func Errors() gin.HandlerFunc {
 						c.JSON(c.Writer.Status(), gin.H{"Error": e.Error()})
 					}
 				case gin.ErrorTypeBind:
-					errs := e.Err.(validator.ValidationErrors)
-					list := make(map[string]string)
-					for _,err := range errs {
-						list[err.Field()] = ValidationErrorToText(err)
-						fmt.Println(err.Field())
-					}
-
-					// Make sure we maintain the preset response status
 					status := http.StatusBadRequest
 					if c.Writer.Status() != http.StatusOK {
 						status = c.Writer.Status()
 					}
-					c.JSON(status, gin.H{"errors": list})
+					switch errs := e.Err.(type) {
+						case validator.ValidationErrors:
+							list := make(map[string]string)
+							for _,err := range errs {
+								list[err.Field()] = ValidationErrorToText(err)
+								fmt.Println(err.Field())
+							}
+
+							// Make sure we maintain the preset response status
+							
+							c.JSON(status, gin.H{"errors": list})
+						default:
+							c.JSON(status, gin.H{"message": "invalid field"})
+					}
+					
 
 				default:
 					// Log all other errors
