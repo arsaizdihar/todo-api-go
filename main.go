@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -20,75 +19,89 @@ type Todo struct {
 	Done bool `json:"done"`
 }
 
-func getTodos(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+type TodoInput struct {
+	Title string `json:"title" binding:"required"`
+}
+
+func getTodos(c *gin.Context) {
 	var todos []Todo
 
 	db.Find(&todos)
-
-	json.NewEncoder(w).Encode(todos)
+	c.JSON(http.StatusOK, todos)
 }
 
-func getTodo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(r)
+func getTodo(c *gin.Context) {
 
 	var todo Todo
 
-	db.First(&todo, vars["id"])
+	if err := db.First(&todo, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "id not found"})
+		return
+	}
 
-	json.NewEncoder(w).Encode(todo)
+	c.JSON(http.StatusOK, todo)
 }
 
-func toggleTodo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(r)
+func toggleTodo(c *gin.Context) {
 
 	var todo Todo
 
-	db.First(&todo, vars["id"])
+	if err := db.First(&todo, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "id not found"})
+		return
+	}
+
 	todo.Done = !todo.Done
 	db.Save(&todo)
 
-	json.NewEncoder(w).Encode(todo)
+	c.JSON(http.StatusOK, todo)
 }
 
-func updateTodo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(r)
+func updateTodo(c *gin.Context) {
 
 	var todo Todo
-	var todoUpdates Todo
+	var input TodoInput
 
-	json.NewDecoder(r.Body).Decode(&todoUpdates)
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	db.First(&todo, vars["id"])
-	db.Model(&todo).Updates(todoUpdates)
+	if err := db.First(&todo, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "id not found"})
+		return
+	}
 
-	json.NewEncoder(w).Encode(todo)
+	db.Model(&todo).Updates(Todo{Title: input.Title})
+
+	c.JSON(http.StatusOK, todo)
 
 }
 
-func deleteTodo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(r)
+func deleteTodo(c *gin.Context) {
 
 	var todo Todo
 
-	db.First(&todo, vars["id"])
+	if err := db.First(&todo, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "id not found"})
+		return
+	}
 	db.Delete(&todo)
 
-	json.NewEncoder(w).Encode(Todo{})
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
 
-func createTodo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var todo Todo
-	json.NewDecoder(r.Body).Decode(&todo)
-
+func createTodo(c *gin.Context) {
+	var input TodoInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	todo := Todo{Title: input.Title}
 	db.Create(&todo)
-	json.NewEncoder(w).Encode(todo)
+
+	c.JSON(http.StatusCreated, todo)
 }
 
 var db *gorm.DB
@@ -98,6 +111,11 @@ func main() {
 	godotenv.Load()
 
 	dsn := os.Getenv("DSN")
+
+	if os.Getenv("GIN_MODE") == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 
 	if err != nil {
@@ -109,14 +127,14 @@ func main() {
 	db.AutoMigrate(&Todo{})
 
 
-	r := mux.NewRouter()
+	r := gin.Default()
 
-	r.HandleFunc("/api/todos", getTodos).Methods("GET")
-	r.HandleFunc("/api/todos", createTodo).Methods("POST")
-	r.HandleFunc("/api/todos/{id:[0-9]+}", getTodo).Methods("GET")
-	r.HandleFunc("/api/todos/toggle/{id}", toggleTodo).Methods("POST")
-	r.HandleFunc("/api/todos/{id:[0-9]+}", updateTodo).Methods("PUT")
-	r.HandleFunc("/api/todos/{id:[0-9]+}", deleteTodo).Methods("DELETE")
+	r.GET("/api/todos", getTodos)
+	r.POST("/api/todos", createTodo)
+	r.GET("/api/todos/:id", getTodo)
+	r.POST("/api/todos/toggle/:id", toggleTodo)
+	r.PUT("/api/todos/:id", updateTodo)
+	r.DELETE("/api/todos/:id", deleteTodo)
 
-	log.Fatal(http.ListenAndServe("localhost:" + os.Getenv("PORT"), r))
+	r.Run("localhost:" + os.Getenv("PORT"))
 }
