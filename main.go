@@ -4,9 +4,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
+	"strings"
 	"time"
+	"todo-api/middleware"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -60,12 +65,8 @@ func toggleTodo(c *gin.Context) {
 func updateTodo(c *gin.Context) {
 
 	var todo Todo
-	var input TodoInput
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	input := c.MustGet(gin.BindKey).(*TodoInput)
 
 	if err := db.First(&todo, c.Param("id")).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "id not found"})
@@ -93,11 +94,7 @@ func deleteTodo(c *gin.Context) {
 
 
 func createTodo(c *gin.Context) {
-	var input TodoInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	input := c.MustGet(gin.BindKey).(*TodoInput)
 	todo := Todo{Title: input.Title}
 	db.Create(&todo)
 
@@ -111,6 +108,7 @@ func main() {
 	godotenv.Load()
 
 	dsn := os.Getenv("DSN")
+	
 
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -125,12 +123,24 @@ func main() {
 	}
 
 	db.AutoMigrate(&Todo{})
-
+	
 
 	r := gin.Default()
 
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+			if name == "-" {
+				return ""
+			}
+			return name
+		})
+	}
+
+	r.Use(middleware.Errors())
+
 	r.GET("/api/todos", getTodos)
-	r.POST("/api/todos", createTodo)
+	r.POST("/api/todos", gin.Bind(TodoInput{}), createTodo)
 	r.GET("/api/todos/:id", getTodo)
 	r.POST("/api/todos/toggle/:id", toggleTodo)
 	r.PUT("/api/todos/:id", updateTodo)
